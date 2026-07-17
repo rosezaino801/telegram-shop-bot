@@ -2,13 +2,16 @@
 Telegram Customer Support Bot
 ================================
 A clean, well-commented bot using python-telegram-bot v20+.
-It greets users, displays an inline keyboard, and handles each button via
-CallbackQueryHandler so the menu stays embedded in the message.
+
+- Inline keyboard with Products, Prices, Contact Support, About Us buttons.
+- Any free-text message (not a command or button press) is forwarded to
+  OpenAI and the AI's reply is sent back to the user.
 """
 
 import logging
 import os
 
+from openai import AsyncOpenAI
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -29,10 +32,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# OpenAI client
+# ---------------------------------------------------------------------------
+# AsyncOpenAI reads OPENAI_API_KEY from the environment automatically.
+openai_client = AsyncOpenAI()
+
+# System prompt that shapes how the AI responds inside this support bot.
+SYSTEM_PROMPT = (
+    "You are a friendly and helpful customer support assistant for our business. "
+    "Answer questions clearly and concisely. "
+    "If you don't know something, say so honestly and suggest the user contact "
+    "the support team at support@example.com."
+)
+
+# ---------------------------------------------------------------------------
 # Inline keyboard layout
 # ---------------------------------------------------------------------------
-# Each InlineKeyboardButton needs a label (text) and a callback_data string
-# that identifies which button was pressed.
 MAIN_KEYBOARD = InlineKeyboardMarkup(
     [
         [
@@ -65,16 +80,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• Pricing details\n"
         "• Getting in touch with our support team\n"
         "• Learning more about us\n\n"
-        "Tap a button below to get started 👇"
+        "Tap a button below, or just type your question and I'll answer it 💬"
     )
 
     await update.message.reply_text(welcome_text, reply_markup=MAIN_KEYBOARD)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    /help — Shows available commands and inline menu.
-    """
+    """/help — Shows available commands and inline menu."""
     help_text = (
         "🆘 *Help Menu*\n\n"
         "Use the inline buttons below or type one of these commands:\n\n"
@@ -84,7 +97,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "🛍️ *Products* — Browse our product catalogue\n"
         "💰 *Prices*   — View our current pricing\n"
         "🎧 *Contact Support* — Reach a human agent\n"
-        "ℹ️ *About Us* — Learn who we are\n"
+        "ℹ️ *About Us* — Learn who we are\n\n"
+        "Or just *type any question* and our AI assistant will help you! 🤖"
     )
 
     await update.message.reply_text(
@@ -101,7 +115,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def handle_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Called when the user taps the 🛍️ Products inline button."""
     query = update.callback_query
-    # Acknowledge the button press so Telegram stops showing a loading spinner.
     await query.answer()
 
     text = (
@@ -113,8 +126,6 @@ async def handle_products(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         "Want more details on a specific product? "
         "Tap 🎧 *Contact Support* and our team will help you out."
     )
-
-    # Edit the original message so the inline keyboard stays visible.
     await query.edit_message_text(text, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 
@@ -132,7 +143,6 @@ async def handle_prices(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "All prices include VAT. Bulk discounts available — "
         "contact support for details."
     )
-
     await query.edit_message_text(text, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 
@@ -150,7 +160,6 @@ async def handle_contact_support(update: Update, context: ContextTypes.DEFAULT_T
         "will follow up with you shortly. We typically respond within "
         "*2 business hours*."
     )
-
     await query.edit_message_text(text, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 
@@ -171,24 +180,45 @@ async def handle_about_us(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         "• 📘 Facebook: /example\n"
         "• 📸 Instagram: @example"
     )
-
     await query.edit_message_text(text, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 
 # ---------------------------------------------------------------------------
-# Fallback message handler
+# AI fallback handler
 # ---------------------------------------------------------------------------
 
-async def handle_unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_ai_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Fallback handler for any text message that isn't a command.
-    Nudges the user back to the inline menu.
+    Handles any free-text message that isn't a command or button press.
+    Sends the user's message to OpenAI and replies with the AI's response.
     """
-    text = (
-        "🤔 I didn't quite get that.\n\n"
-        "Please use the buttons below, or type /help to see what I can do."
-    )
-    await update.message.reply_text(text, reply_markup=MAIN_KEYBOARD)
+    user_text = update.message.text
+
+    # Show a typing indicator while we wait for the OpenAI response.
+    await update.message.chat.send_action("typing")
+
+    try:
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": user_text},
+            ],
+            max_tokens=1024,
+        )
+
+        ai_reply = response.choices[0].message.content.strip()
+        logger.info("OpenAI replied (%d chars) to: %s", len(ai_reply), user_text[:60])
+
+    except Exception as exc:
+        logger.error("OpenAI request failed: %s", exc)
+        ai_reply = (
+            "⚠️ Sorry, I couldn't reach the AI right now. "
+            "Please try again in a moment, or tap a button below for quick help."
+        )
+
+    # Send the AI reply and keep the inline menu visible.
+    await update.message.reply_text(ai_reply, reply_markup=MAIN_KEYBOARD)
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +228,6 @@ async def handle_unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 def main() -> None:
     """Build and start the bot."""
 
-    # Read the token from the environment variable set in Replit Secrets.
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError(
@@ -206,7 +235,12 @@ def main() -> None:
             "Add it in the Replit Secrets panel."
         )
 
-    # Build the Application (handles networking and dispatching).
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise RuntimeError(
+            "OPENAI_API_KEY environment variable is not set. "
+            "Add it in the Replit Secrets panel."
+        )
+
     app = Application.builder().token(token).build()
 
     # --- Command handlers ---
@@ -214,19 +248,17 @@ def main() -> None:
     app.add_handler(CommandHandler("help", help_command))
 
     # --- Inline button handlers ---
-    # Each CallbackQueryHandler matches on the callback_data string set in
-    # the InlineKeyboardButton above.
-    app.add_handler(CallbackQueryHandler(handle_products,       pattern="^products$"))
-    app.add_handler(CallbackQueryHandler(handle_prices,         pattern="^prices$"))
+    app.add_handler(CallbackQueryHandler(handle_products,        pattern="^products$"))
+    app.add_handler(CallbackQueryHandler(handle_prices,          pattern="^prices$"))
     app.add_handler(CallbackQueryHandler(handle_contact_support, pattern="^contact_support$"))
-    app.add_handler(CallbackQueryHandler(handle_about_us,       pattern="^about_us$"))
+    app.add_handler(CallbackQueryHandler(handle_about_us,        pattern="^about_us$"))
 
-    # --- Fallback: catch all other text messages ---
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_unknown))
+    # --- AI fallback: any text that isn't a command goes to OpenAI ---
+    # This handler runs AFTER all the above, so button presses are never
+    # caught here (they arrive as CallbackQuery updates, not text messages).
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ai_message))
 
     logger.info("Bot is running. Press Ctrl+C to stop.")
-
-    # Start polling Telegram for updates (blocks until interrupted).
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
