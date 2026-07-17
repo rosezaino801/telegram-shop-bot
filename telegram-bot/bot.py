@@ -4,11 +4,17 @@ Telegram Customer Support Bot
 Uses python-telegram-bot v20+ and the Google Gemini SDK (google-genai).
 
 Handler routing:
-  /start, /help      → CommandHandler
-  Inline buttons     → CallbackQueryHandler  (callback_data strings)
-  Button label text  → MessageHandler + Regex (covers old ReplyKeyboard users
-                        and anyone who types the label manually)
-  Everything else    → Gemini AI fallback
+  /start, /help, /myid  → CommandHandler
+  Inline buttons         → CallbackQueryHandler  (callback_data strings)
+  Button label text      → MessageHandler + Regex (covers old ReplyKeyboard users
+                            and anyone who types the label manually)
+  Everything else        → Gemini AI fallback
+
+Admin notifications:
+  Every incoming interaction (text messages and button presses) is forwarded to
+  the admin chat specified by ADMIN_CHAT_ID. Set that secret in Replit Secrets.
+  If ADMIN_CHAT_ID is not set the bot still works — notifications are silently
+  skipped. Notification failures never crash the bot.
 """
 
 import logging
@@ -52,6 +58,71 @@ SYSTEM_PROMPT = (
     "If you don't know something, say so honestly and suggest the user contact "
     "the support team at support@example.com."
 )
+
+# ---------------------------------------------------------------------------
+# Admin notification config
+# ---------------------------------------------------------------------------
+# Set ADMIN_CHAT_ID in Replit Secrets to your numeric Telegram chat ID.
+# Use /myid in your bot chat to discover your numeric ID.
+_raw_admin_id = os.environ.get("ADMIN_CHAT_ID", "").strip()
+ADMIN_CHAT_ID: int | None = int(_raw_admin_id) if _raw_admin_id.lstrip("-").isdigit() else None
+
+if ADMIN_CHAT_ID:
+    logger.info("Admin notifications enabled → chat ID %d", ADMIN_CHAT_ID)
+else:
+    logger.warning(
+        "ADMIN_CHAT_ID is not set. Admin notifications are disabled. "
+        "Send /myid to the bot from your Telegram account to find your numeric ID, "
+        "then add it as ADMIN_CHAT_ID in Replit Secrets."
+    )
+
+# ---------------------------------------------------------------------------
+# Admin notification helper
+# ---------------------------------------------------------------------------
+
+async def notify_admin(context: ContextTypes.DEFAULT_TYPE, user, action: str) -> None:
+    """
+    Forward a user interaction to the admin chat.
+
+    Parameters
+    ----------
+    context : ContextTypes.DEFAULT_TYPE
+        Handler context (provides access to context.bot).
+    user    : telegram.User
+        The Telegram user who triggered the action.
+    action  : str
+        Human-readable description of what the user did / sent.
+    """
+    if not ADMIN_CHAT_ID:
+        return  # notifications disabled — ADMIN_CHAT_ID not configured
+
+    # Don't notify about the admin's own interactions
+    if user and user.id == ADMIN_CHAT_ID:
+        return
+
+    first_name = user.first_name or ""
+    last_name  = user.last_name  or ""
+    full_name  = f"{first_name} {last_name}".strip() or "Unknown"
+    username   = f"@{user.username}" if user.username else "_(no username)_"
+    user_id    = user.id
+
+    notification = (
+        f"🔔 *New user interaction*\n\n"
+        f"👤 *Name:* {full_name}\n"
+        f"🆔 *User ID:* `{user_id}`\n"
+        f"📎 *Username:* {username}\n"
+        f"💬 *Message:* {action}"
+    )
+
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=notification,
+            parse_mode="Markdown",
+        )
+    except Exception as exc:
+        # Never crash the bot over a notification failure
+        logger.error("Failed to send admin notification: %s", exc)
 
 # ---------------------------------------------------------------------------
 # Inline keyboard
@@ -126,6 +197,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     username   = f"@{user.username}" if (user and user.username) else first_name
 
     logger.info("User %s (%s) sent /start", first_name, username)
+    await notify_admin(context, user, "/start — opened the bot")
 
     welcome_text = (
         f"👋 Hello, {first_name}! Welcome to our Customer Support bot.\n\n"
@@ -148,6 +220,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/help — command reference."""
+    user = update.effective_user
+    logger.info("User %s sent /help", user.first_name if user else "unknown")
+    await notify_admin(context, user, "/help — requested help menu")
+
     help_text = (
         "🆘 *Help Menu*\n\n"
         "Commands:\n"
@@ -164,6 +240,21 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         help_text, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD
     )
 
+
+async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/myid — replies with the sender's numeric Telegram chat ID.
+    Useful for finding the value to set as ADMIN_CHAT_ID in Replit Secrets.
+    """
+    user    = update.effective_user
+    chat_id = update.effective_chat.id
+    await update.message.reply_text(
+        f"🆔 Your numeric Telegram ID is:\n\n`{chat_id}`\n\n"
+        "Copy this number and add it as `ADMIN_CHAT_ID` in Replit Secrets "
+        "to enable admin notifications.",
+        parse_mode="Markdown",
+    )
+    logger.info("/myid requested by %s — chat ID %d", user.first_name if user else "unknown", chat_id)
+
 # ---------------------------------------------------------------------------
 # Inline-button handlers  (callback_data from InlineKeyboardButton)
 # ---------------------------------------------------------------------------
@@ -172,24 +263,28 @@ async def cb_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     q = update.callback_query
     await q.answer()
     logger.info("Inline button: products (user %s)", q.from_user.first_name)
+    await notify_admin(context, q.from_user, "🛍️ Products _(button press)_")
     await q.edit_message_text(_products_text(), parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 async def cb_prices(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     logger.info("Inline button: prices (user %s)", q.from_user.first_name)
+    await notify_admin(context, q.from_user, "💰 Prices _(button press)_")
     await q.edit_message_text(_prices_text(), parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 async def cb_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     logger.info("Inline button: contact_support (user %s)", q.from_user.first_name)
+    await notify_admin(context, q.from_user, "🎧 Contact Support _(button press)_")
     await q.edit_message_text(_contact_text(), parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 async def cb_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     logger.info("Inline button: about_us (user %s)", q.from_user.first_name)
+    await notify_admin(context, q.from_user, "ℹ️ About Us _(button press)_")
     await q.edit_message_text(_about_text(), parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 # ---------------------------------------------------------------------------
@@ -201,19 +296,27 @@ async def cb_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # of an AI answer.
 
 async def txt_products(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info("Text pattern: Products (user %s)", update.effective_user.first_name)
+    user = update.effective_user
+    logger.info("Text pattern: Products (user %s)", user.first_name)
+    await notify_admin(context, user, update.message.text)
     await update.message.reply_text(_products_text(), parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 async def txt_prices(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info("Text pattern: Prices (user %s)", update.effective_user.first_name)
+    user = update.effective_user
+    logger.info("Text pattern: Prices (user %s)", user.first_name)
+    await notify_admin(context, user, update.message.text)
     await update.message.reply_text(_prices_text(), parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 async def txt_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info("Text pattern: Contact Support (user %s)", update.effective_user.first_name)
+    user = update.effective_user
+    logger.info("Text pattern: Contact Support (user %s)", user.first_name)
+    await notify_admin(context, user, update.message.text)
     await update.message.reply_text(_contact_text(), parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 async def txt_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info("Text pattern: About Us (user %s)", update.effective_user.first_name)
+    user = update.effective_user
+    logger.info("Text pattern: About Us (user %s)", user.first_name)
+    await notify_admin(context, user, update.message.text)
     await update.message.reply_text(_about_text(), parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 # ---------------------------------------------------------------------------
@@ -227,6 +330,9 @@ async def handle_ai_message(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     username   = update.effective_user.username   if update.effective_user else "unknown"
 
     logger.info("AI fallback triggered — user: %s (@%s) — text: %.60s", first_name, username, user_text)
+
+    # Notify admin before waiting on Gemini so the notification arrives quickly
+    await notify_admin(context, update.effective_user, user_text)
 
     await update.message.chat.send_action("typing")
 
@@ -268,9 +374,10 @@ def main() -> None:
 
     app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).build()
 
-    # 1. Commands  (/start, /help)
+    # 1. Commands  (/start, /help, /myid)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help",  help_command))
+    app.add_handler(CommandHandler("myid",  myid_command))
 
     # 2. Inline-button callbacks  (highest priority for button presses)
     app.add_handler(CallbackQueryHandler(cb_products, pattern="^products$"))
