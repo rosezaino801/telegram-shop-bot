@@ -1,0 +1,202 @@
+{
+  "store": {
+    "name": "StyleVault",
+    "tagline": "Premium Fashion & Lifestyle — Delivered to You",
+    "contact_email": "your_email@gmail.com",
+    "contact_whatsapp": "+2348000000000",
+    "business_hours": "Mon – Sat, 9 AM – 7 PM (WAT)",
+    "order_instructions": "Send us a message with the *product name*, your *size* (if applicable), and your *delivery address* and we will get back to you with payment details.",
+    "banner_image": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80"
+  },
+  "categories": [
+    {
+      "id": "leather_bags",
+      "name": "Leather Bags",
+      "emoji": "👜",
+      "products": [
+        {
+          "id": "bag_001",
+          "name": "Classic Structured Tote",
+          "description": "Handcrafted from full-grain genuine leather. Spacious interior with magnetic snap closure, two slip pockets, and a zip pocket. Comes with a removable shoulder strap.",
+          "price": 45000,
+          "image_url": "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=800&q=80"
+        },
+        {
+          "id": "bag_002",
+          "name": "Mini Crossbody Leather Bag",
+          "description": "Compact and stylish top-handle bag crafted from soft pebbled leather. Features an adjustable strap and gold-tone hardware. Perfect for evenings and everyday carry.",
+          "price": 28000,
+          "image_url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&q=80"
+        }
+      ]
+    },
+    {
+      "id": "shoes",
+      "name": "Shoes",
+      "emoji": "👞",
+      "products": [
+        {
+          "id": "shoe_001",
+          "name": "Classic Oxford Leather Shoes",
+          "description": "Timeless cap-toe oxfords in smooth calfskin leather. Goodyear-welted construction for lasting durability. Available in black and tan. Dress smart, every day.",
+          "price": 38000,
+          "image_url": "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=800&q=80"
+        },
+        {
+          "id": "shoe_002",
+          "name": "Chelsea Ankle Boot",
+          "description": "Sleek pull-on Chelsea boot in supple leather with elasticated side panels. Block heel for extra comfort. Pairs effortlessly with jeans, chinos, or a suit.",
+          "price": 42000,
+          "image_url": "https://images.unsplash.com/photo-1638247025967-b4e38f787b76?w=800&q=80"
+        }
+      ]
+    },
+    {
+      "id": "sneakers",
+      "name": "Sneakers",
+      "emoji": "👟",
+      "products": [
+        {
+          "id": "snk_001",
+          "name": "Premium White Low-Top Sneakers",
+          "description": "Clean, minimalist low-top sneakers with a cushioned insole and rubber outsole. Crafted from genuine leather upper. The perfect go-to sneaker for any outfit.",
+          "price": 22000,
+          "image_url": "https://images.unsplash.com/photo-1600185365926-3a2ce3cdb9eb?w=800&q=80"
+        },
+        {
+          "id": "snk_002",
+          "name": "Retro High-Top Sneakers",
+          "description": "Bold high-top silhouette with chunky sole and padded ankle collar. Premium canvas upper with leather accents. Available in multiple colourways.",
+          "price": 18500,
+          "image_url": "https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?w=800&q=80"
+        }
+      ]
+    },
+    {
+      "id": "tops",
+      "name": "Tops",
+      "emoji": "👕",
+      "products": [
+        {
+          "id": "top_001",
+          "name": "Premium Heavyweight T-Shirt",
+          "description": "240 GSM 100% ring-spun cotton tee with a relaxed boxy fit. Pre-shrunk for a consistent fit wash after wash. Available in 10 colours including black, white, and earth tones.",
+          "price": 8500,
+          "image_url": "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800&q=80"
+        },
+        {
+          "id": "top_002",
+          "name": "Linen Button-Up Shirt",
+          "description": "Breathable 100% linen shirt with a relaxed, slightly oversized fit. Features a spread collar, chest pocket, and mother-of-pearl buttons. Ideal for tropical weather.",
+          "price": 14500,
+          "image_url": "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&q=80"
+        }
+      ]
+    },
+    {
+      "id": "baggy_jeans",
+      "name": "Baggy Jeans",
+      "emoji": "👖",
+      "products": [
+        {
+          "id": "jeans_001",
+          "name": "Relaxed Straight-Leg Jeans",
+          "description": "Roomy, relaxed straight-leg jeans in heavyweight 12 oz denim. Slightly dropped crotch and wide thigh for maximum comfort. Classic five-pocket styling. Unisex fit.",
+          "price": 19500,
+          "image_url": "https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&q=80"
+        },
+        {
+          "id": "jeans_002",
+          "name": "Wide-Leg Cargo Jeans",
+          "description": "Ultra-wide leg cargo jeans with six functional pockets. Mid-rise waist with adjustable belt loops. Made from durable denim with a slight stretch for comfort.",
+          "price": 23000,
+          "image_url": "https://images.unsplash.com/photo-1565084888279-aca607bb7340?w=800&q=80"
+        }
+      ]
+    },
+    {
+      "id": "wrist_watches",
+      "name": "Wrist Watches",
+      "emoji": "⌚",
+      "products": [
+        {
+          "id": "watch_001",
+          "name": "Classic Stainless Steel Watch",
+          "description": "Elegant 40 mm stainless steel case with a sapphire crystal glass and automatic movement. Water-resistant to 50 m. Comes with a stainless steel bracelet and a spare leather strap.",
+          "price": 65000,
+          "image_url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80"
+        },
+        {
+          "id": "watch_002",
+          "name": "Minimalist Leather Strap Watch",
+          "description": "Ultra-thin 38 mm case with a clean sunburst dial and genuine leather strap. Japanese quartz movement. A timeless everyday watch that dresses up or down.",
+          "price": 38000,
+          "image_url": "https://images.unsplash.com/photo-1533139502658-0198f920d8e8?w=800&q=80"
+        }
+      ]
+    },
+    {
+      "id": "glasses",
+      "name": "Glasses",
+      "emoji": "🕶️",
+      "products": [
+        {
+          "id": "glass_001",
+          "name": "Classic Aviator Sunglasses",
+          "description": "Iconic teardrop-shaped aviator frames in polished gold-tone metal. Polarised gradient lenses with UV400 protection. Comes with a hard case and microfibre cleaning cloth.",
+          "price": 15000,
+          "image_url": "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&q=80"
+        },
+        {
+          "id": "glass_002",
+          "name": "Square Frame Optical Glasses",
+          "description": "Bold square acetate frames available in tortoise, black, and crystal. Lightweight yet sturdy construction. Suitable for prescription lenses (glazing available on request).",
+          "price": 12000,
+          "image_url": "https://images.unsplash.com/photo-1574258495973-f010dfbb5371?w=800&q=80"
+        }
+      ]
+    },
+    {
+      "id": "body_cream",
+      "name": "Body Cream",
+      "emoji": "🧴",
+      "products": [
+        {
+          "id": "body_001",
+          "name": "Shea Butter Glow Body Cream",
+          "description": "Rich, fast-absorbing body cream packed with raw shea butter, cocoa butter, and vitamin E. Deeply moisturises, evens skin tone, and leaves a natural glow. Fragrance-free.",
+          "price": 5500,
+          "image_url": "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=800&q=80"
+        },
+        {
+          "id": "body_002",
+          "name": "Vitamin C Brightening Body Lotion",
+          "description": "Lightweight daily lotion infused with stable Vitamin C, niacinamide, and hyaluronic acid. Brightens dull skin, fades dark spots, and provides all-day hydration.",
+          "price": 7800,
+          "image_url": "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=800&q=80"
+        }
+      ]
+    },
+    {
+      "id": "hair_cream",
+      "name": "Hair Cream",
+      "emoji": "💆",
+      "products": [
+        {
+          "id": "hair_001",
+          "name": "Intense Moisture Hair Cream",
+          "description": "Leave-in moisturising cream enriched with argan oil, shea butter, and keratin. Softens, detangles, and defines curls without weighing hair down. Suitable for all hair types.",
+          "price": 4200,
+          "image_url": "https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=800&q=80"
+        },
+        {
+          "id": "hair_002",
+          "name": "Edge Control & Styling Cream",
+          "description": "Firm-hold styling cream for sleek edges and frizz control. Enriched with castor oil and aloe vera for moisture. Long-lasting hold that does not flake or leave residue.",
+          "price": 3800,
+          "image_url": "https://images.unsplash.com/photo-1585751119414-ef2636f8aede?w=800&q=80"
+        }
+      ]
+    }
+  ]
+}
