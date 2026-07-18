@@ -1214,7 +1214,7 @@ async def settings_get_value(update: Update, context: ContextTypes.DEFAULT_TYPE)
 def main() -> None:
     for key in ("TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY"):
         if not os.environ.get(key):
-            raise RuntimeError(f"{key} is not set. Add it in Replit Secrets.")
+            raise RuntimeError(f"{key} is not set. Add it as an environment variable.")
 
     app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).build()
 
