@@ -7,6 +7,8 @@ services:
     healthCheckPath: /
     envVars:
       - key: TELEGRAM_BOT_TOKEN
-        sync: false          # set manually in Render dashboard
+        sync: false          # required — bot token from @BotFather
       - key: GEMINI_API_KEY
-        sync: false          # set manually in Render dashboard
+        sync: false          # required — Google Gemini API key
+      - key: ADMIN_CHAT_ID
+        sync: false          # optional — your numeric Telegram ID for admin panel
