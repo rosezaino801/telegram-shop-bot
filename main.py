@@ -1,13 +1,15 @@
 """
-Entry point for Render Web Service deployments.
+Render entry point for Muhammed Fashion Store Telegram bot.
 
-Render requires a process to bind to $PORT within ~2 minutes or it
-kills the deployment as "timed out". A Telegram polling bot never
-opens a port, so we satisfy Render by running a tiny health-check
-HTTP server on $PORT in a background daemon thread, then start the
-bot's blocking polling loop on the main thread.
+Render's free-tier web service kills any process that doesn't bind a port
+within 60 seconds.  This file satisfies that requirement by starting a
+minimal HTTP health-check server on $PORT in a background daemon thread,
+then handing control to the bot's main() function.
 
-Start command on Render:  python main.py
+Project layout
+--------------
+main.py              ← this file (Render start command: python main.py)
+telegram-bot/bot.py  ← all bot logic; exposes main()
 """
 
 import os
@@ -15,39 +17,40 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# ── Health-check server ───────────────────────────────────────────────────────
+# Make `telegram-bot/` importable as a plain package directory.
+BOT_DIR = os.path.join(os.path.dirname(__file__), "telegram-bot")
+if BOT_DIR not in sys.path:
+    sys.path.insert(0, BOT_DIR)
+
+
+# ── Tiny HTTP health-check server ─────────────────────────────────────────────
 
 class _HealthHandler(BaseHTTPRequestHandler):
-    """Returns 200 OK for any GET — satisfies Render's health check."""
+    """Respond to GET / with 200 OK so Render's health check passes."""
 
-    def do_GET(self):  # noqa: N802
+    def do_GET(self):
         self.send_response(200)
-        self.send_header("Content-Type", "text/plain")
         self.end_headers()
         self.wfile.write(b"OK")
 
-    def log_message(self, *_):  # silence default request logging
+    def log_message(self, fmt, *args):  # silence access logs
         pass
 
 
-def _start_health_server():
-    port = int(os.environ.get("PORT", "8080"))
+def _start_health_server() -> None:
+    port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), _HealthHandler)
-    print(f"[main] Health-check server listening on port {port}", flush=True)
+    print(f"[health] Listening on port {port}", flush=True)
     server.serve_forever()
 
 
-# ── Bot startup ───────────────────────────────────────────────────────────────
-
-# Make telegram-bot/ importable without a package __init__
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "telegram-bot"))
-
-from bot import main as bot_main  # noqa: E402
+# ── Start health server in a daemon thread, then run the bot ──────────────────
 
 if __name__ == "__main__":
-    # 1. Bind to PORT immediately so Render doesn't time out
-    health_thread = threading.Thread(target=_start_health_server, daemon=True)
-    health_thread.start()
+    t = threading.Thread(target=_start_health_server, daemon=True)
+    t.start()
 
-    # 2. Run the bot — blocks forever (polling loop)
+    # Import and run the bot.  bot.py's main() calls app.run_polling() which
+    # blocks forever, keeping this process (and the daemon thread) alive.
+    from bot import main as bot_main
     bot_main()
