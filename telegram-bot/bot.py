@@ -249,6 +249,20 @@ def _fmt_price(price: int) -> str:
     return f"₦{price:,}"
 
 
+def _escape_md(text: str) -> str:
+    """Escape characters that break Telegram Markdown v1 parsing.
+
+    User-supplied values (names, addresses, notes …) must be escaped before
+    being interpolated into a parse_mode='Markdown' string, otherwise any
+    underscore, asterisk, back-tick or bracket in the text causes Telegram to
+    return a BadRequest error, which python-telegram-bot catches silently —
+    leaving the user with no reply and the conversation frozen.
+    """
+    for ch in ("_", "*", "`", "["):
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
+
 def _new_prod_id(cat_id: str) -> str:
     return f"{cat_id}_{int(time.time())}"
 
@@ -506,6 +520,17 @@ async def ord_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def ord_get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Guard: order data is lost if the bot restarted mid-conversation.
+    if not context.user_data.get("order"):
+        await update.message.reply_text(
+            "⚠️ Your session expired. Please tap *Order Now* on a product to start again.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🛍️ Browse Products", callback_data="cats"),
+            ]]),
+        )
+        return ConversationHandler.END
+
     name = update.message.text.strip()
     if len(name) < 2:
         await update.message.reply_text(
@@ -515,8 +540,11 @@ async def ord_get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return ORD_NAME
 
     context.user_data["order"]["full_name"] = name
+    # _escape_md prevents a Telegram BadRequest when the name contains
+    # Markdown special characters (_ * ` [).  A BadRequest is caught silently
+    # by PTB, leaving the user with no reply and the conversation frozen.
     await update.message.reply_text(
-        f"✅ Hi, *{name}*!\n\n"
+        f"✅ Hi, *{_escape_md(name)}*!\n\n"
         f"*Step 2 of 5* — What is your *phone number?*\n"
         f"_(We will use this to contact you about your order.)_",
         parse_mode="Markdown",
@@ -526,12 +554,28 @@ async def ord_get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def ord_get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    phone = update.message.text.strip()
-    # Accept Nigerian formats: 08xxxxxxxxx, +2348xxxxxxxxx, 2348xxxxxxxxx, etc.
-    digits = re.sub(r"[\s\-\(\)]", "", phone)
-    if not re.match(r"^(\+?234|0)\d{9,10}$", digits) and len(digits) < 7:
+    if not context.user_data.get("order"):
         await update.message.reply_text(
-            "❌ That doesn't look like a valid phone number. Please try again.",
+            "⚠️ Your session expired. Please tap *Order Now* on a product to start again.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🛍️ Browse Products", callback_data="cats"),
+            ]]),
+        )
+        return ConversationHandler.END
+
+    phone = update.message.text.strip()
+    # Strip formatting characters then check digit count.
+    # Original code used `and` (both conditions must be true to reject), which
+    # accidentally accepted any string with 7+ digits regardless of format.
+    # Fixed: reject if the cleaned string contains fewer than 7 digits OR is
+    # not purely numeric after stripping separators.
+    digits = re.sub(r"[\s\-\(\)+]", "", phone)
+    if not digits.isdigit() or len(digits) < 7:
+        await update.message.reply_text(
+            "❌ That doesn't look like a valid phone number. Please try again.\n"
+            "_Example: 08012345678 or +2348012345678_",
+            parse_mode="Markdown",
             reply_markup=_CANCEL_KB,
         )
         return ORD_PHONE
@@ -547,6 +591,16 @@ async def ord_get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
 async def ord_get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not context.user_data.get("order"):
+        await update.message.reply_text(
+            "⚠️ Your session expired. Please tap *Order Now* on a product to start again.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🛍️ Browse Products", callback_data="cats"),
+            ]]),
+        )
+        return ConversationHandler.END
+
     address = update.message.text.strip()
     if len(address) < 5:
         await update.message.reply_text(
@@ -556,7 +610,7 @@ async def ord_get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return ORD_ADDRESS
 
     context.user_data["order"]["address"] = address
-    prod_name = context.user_data["order"]["prod_name"]
+    prod_name = _escape_md(context.user_data["order"]["prod_name"])
     await update.message.reply_text(
         f"*Step 4 of 5* — How many units of *{prod_name}* would you like to order?",
         parse_mode="Markdown",
@@ -566,6 +620,16 @@ async def ord_get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def ord_get_qty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not context.user_data.get("order"):
+        await update.message.reply_text(
+            "⚠️ Your session expired. Please tap *Order Now* on a product to start again.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🛍️ Browse Products", callback_data="cats"),
+            ]]),
+        )
+        return ConversationHandler.END
+
     raw = re.sub(r"[^\d]", "", update.message.text)
     if not raw or int(raw) < 1:
         await update.message.reply_text(
@@ -591,6 +655,15 @@ async def ord_get_qty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 async def ord_get_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Customer typed their notes — proceed to confirmation."""
+    if not context.user_data.get("order"):
+        await update.message.reply_text(
+            "⚠️ Your session expired. Please tap *Order Now* on a product to start again.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🛍️ Browse Products", callback_data="cats"),
+            ]]),
+        )
+        return ConversationHandler.END
     context.user_data["order"]["notes"] = update.message.text.strip()
     return await _show_order_summary(update.message.reply_text, context)
 
@@ -632,19 +705,21 @@ async def ord_cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def _show_order_summary(reply_fn, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Build and send the order confirmation card. Returns ORD_CONFIRM state."""
     o          = context.user_data["order"]
-    notes_line = f"\n💬 *Notes:* {o['notes']}" if o.get("notes") else ""
+    # Escape all user-supplied strings so Markdown special characters in
+    # names, addresses, or notes don't cause a Telegram BadRequest.
+    notes_line = f"\n💬 *Notes:* {_escape_md(o['notes'])}" if o.get("notes") else ""
     summary    = (
         f"📋 *Order Summary*\n"
         f"{'─' * 26}\n\n"
-        f"🛍️ *Product:* {o['prod_name']}\n"
-        f"📂 *Category:* {o['cat_name']}\n"
+        f"🛍️ *Product:* {_escape_md(o['prod_name'])}\n"
+        f"📂 *Category:* {_escape_md(o['cat_name'])}\n"
         f"🔢 *Quantity:* {o['quantity']}\n"
         f"💰 *Unit Price:* {_fmt_price(o['unit_price'])}\n"
         f"💵 *Total:* {_fmt_price(o['total_price'])}\n"
         f"{'─' * 26}\n\n"
-        f"👤 *Name:* {o['full_name']}\n"
-        f"📞 *Phone:* {o['phone']}\n"
-        f"🏠 *Address:* {o['address']}"
+        f"👤 *Name:* {_escape_md(o['full_name'])}\n"
+        f"📞 *Phone:* {_escape_md(o['phone'])}\n"
+        f"🏠 *Address:* {_escape_md(o['address'])}"
         f"{notes_line}\n\n"
         f"_Please confirm your order below._"
     )
@@ -1208,6 +1283,37 @@ async def settings_get_value(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ADMIN_MAIN
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ── APPLICATION ERROR HANDLER ─────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def global_error_handler(
+    update: object, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Catch-all for unhandled exceptions inside any handler.
+
+    Without this, python-telegram-bot silently logs the error and sends
+    nothing to the user, leaving the conversation frozen with no feedback.
+    This handler logs the full traceback and always sends the user a short
+    recovery message so they know something went wrong.
+    """
+    logger.error(
+        "Unhandled exception for update %s", update, exc_info=context.error
+    )
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "❌ Something went wrong on our end. "
+                "Please type /cancel and try again, or tap a menu button.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🛍️ Browse Products", callback_data="cats"),
+                    InlineKeyboardButton("🏠 Home", callback_data="home"),
+                ]]),
+            )
+        except Exception:
+            pass  # best-effort — don't raise a second error
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1331,6 +1437,12 @@ def main() -> None:
         name="admin_panel",
     )
     app.add_handler(admin_conv)
+
+    # ── Application-level error handler ───────────────────────────────────────
+    # Must be registered AFTER all ConversationHandlers so it catches exceptions
+    # from any of them.  Without this, PTB silently swallows errors and the user
+    # gets no reply, which is the root cause of the frozen conversation bug.
+    app.add_error_handler(global_error_handler)
 
     # ── Customer commands ─────────────────────────────────────────────────────
     app.add_handler(CommandHandler("start", start))
