@@ -29,6 +29,7 @@ All orders are appended to orders.json.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -132,7 +133,7 @@ def _new_order_id() -> str:
 # Gemini AI client
 # ─────────────────────────────────────────────────────────────────────────────
 gemini_client = genai.Client()
-GEMINI_MODEL  = "gemini-3.1-flash-lite"
+GEMINI_MODEL  = "gemini-2.0-flash-lite"
 
 
 def build_system_prompt() -> str:
@@ -794,16 +795,28 @@ async def handle_ai_message(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await notify_admin(context, user, user_text)
     await update.message.chat.send_action("typing")
     try:
-        response = await gemini_client.aio.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=user_text,
-            config=genai_types.GenerateContentConfig(
-                system_instruction=build_system_prompt(),
-                max_output_tokens=1024,
+        # Hard 25-second timeout so a slow/hung Gemini call never blocks
+        # other updates.  Without this, one hanging AI request stalls the
+        # entire bot when concurrent_updates=False (PTB default).
+        response = await asyncio.wait_for(
+            gemini_client.aio.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=user_text,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=build_system_prompt(),
+                    max_output_tokens=1024,
+                ),
             ),
+            timeout=25.0,
         )
         ai_reply = (response.text or "").strip() or (
             "I'm sorry, I couldn't generate a response. Please try rephrasing."
+        )
+    except asyncio.TimeoutError:
+        logger.error("Gemini request timed out after 25 s")
+        ai_reply = (
+            "⚠️ The AI assistant is taking too long. "
+            "Please try again in a moment."
         )
     except Exception as exc:
         logger.error("Gemini error: %s", exc)
@@ -1328,7 +1341,16 @@ def build_app() -> "Application":
         if not os.environ.get(key):
             raise RuntimeError(f"{key} is not set. Add it as an environment variable.")
 
-    app = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).build()
+    app = (
+        Application.builder()
+        .token(os.environ["TELEGRAM_BOT_TOKEN"])
+        # Process each user's updates concurrently so a slow handler (e.g.
+        # Gemini AI call, photo upload) never blocks other users' messages.
+        # ConversationHandlers remain safe: PTB serialises updates per user
+        # even with concurrent_updates=True.
+        .concurrent_updates(True)
+        .build()
+    )
 
     # ── Order ConversationHandler (registered first — highest priority) ───────
     order_conv = ConversationHandler(
